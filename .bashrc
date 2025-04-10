@@ -115,3 +115,60 @@ if ! shopt -oq posix; then
     . /etc/bash_completion
   fi
 fi
+
+# customized settings
+
+function get_git_info {
+    local branch
+    if branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); then
+        echo " \[\033[36m\]($branch)\[\033[0m\]"
+    fi
+}
+
+# 使用 DEBUG trap 啟動計時器
+function prompt_timer_start {
+    PROMPT_TIMER=${PROMPT_TIMER:-$(date +%s.%3N)}
+}
+
+# 在 update_prompt 中使用計時器數據
+function update_prompt {
+    # 計算上一個命令的執行時間
+    local NOW=$(date +%s.%3N)
+    if [[ -n "$PROMPT_TIMER" ]]; then
+        local ELAPSED=$(echo "$NOW - $PROMPT_TIMER" | bc -l)
+        unset PROMPT_TIMER
+    else
+        local ELAPSED=0
+    fi
+    
+    # 格式化時間到毫秒
+    local DURATION=$(printf "%.3f" $ELAPSED)
+    
+    # 其餘的提示符設置與之前相同...
+    local dim_color="\[\033[90m\]"
+    local reset="\[\033[0m\]"
+    
+    # 取得當前時間
+    local timestamp="${dim_color}$(date +%H:%M)${reset}"
+    
+    # 取得 Git 分支與狀態
+    local username="\[\033[32m\]\u${reset}"
+    local at="\[\033[32m\]@${reset}"
+    local hostname="\[\033[32m\]\h${reset}"
+    local cwd="\[\033[33m\]\w${reset}"
+    local git_info="$(get_git_info)"
+    
+    # 僅當時間大於閾值時顯示
+    local exec_time=""
+    if (( $(echo "$ELAPSED > 0.001" | bc -l) )); then
+        exec_time="${dim_color}${DURATION}s${reset}"
+        right_length=$(echo -n "${DURATION}s" | wc -c)
+    fi
+    
+    # 組合提示符
+    PS1="${timestamp} ${username}${at}${hostname} ${cwd}${git_info} ${exec_time}\n\$ "
+}
+
+# 設置 trap 和 PROMPT_COMMAND
+trap 'prompt_timer_start' DEBUG
+PROMPT_COMMAND=update_prompt
